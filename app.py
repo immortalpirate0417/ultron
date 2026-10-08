@@ -21,12 +21,14 @@ def create_app():
     @app.route('/')
     def index():
         if 'user_id' in session:
-            return (
-                f"ULTRON is running. "
-                f"Logged in as {session['username']} ({session['role']})"
-            )
+            return redirect(url_for('dashboard'))
 
-        return "ULTRON is running. <a href='/login'>Login</a>"
+        return redirect(url_for('login'))
+
+    @app.route('/dashboard')
+    @login_required
+    def dashboard():
+        return render_template('dashboard.html')
 
     @app.route('/health')
     def health():
@@ -105,7 +107,7 @@ def create_app():
             ip_address=ip
         )
 
-        return redirect(url_for('index'))
+        return redirect(url_for('dashboard'))
 
     @app.route('/logout')
     def logout():

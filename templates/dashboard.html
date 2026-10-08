@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}
+ULTRON — Dashboard
+{% endblock %}
+
+{% block content %}
+
+<h1>Security Operations Dashboard</h1>
+
+<div class="cards">
+
+    <div class="card">
+        <div class="label">Total Events</div>
+        <div class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Anomalies</div>
+        <div class="value">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">High-Risk Incidents</div>
+        <div class="value danger">--</div>
+    </div>
+
+    <div class="card">
+        <div class="label">Critical Incidents</div>
+        <div class="value danger">--</div>
+    </div>
+
+</div>
+
+<p class="note">
+    Placeholder values. Real security data will be connected in later development stages.
+</p>
+
+{% endblock %}
