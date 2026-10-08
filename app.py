@@ -2,13 +2,15 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, session
 from dotenv import load_dotenv
 from db import get_db_connection
-from auth_utils import verify_password
+from auth_utils import verify_password, login_required, role_required
 
 load_dotenv()
 
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-placeholder-change-later')
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
     @app.route('/')
     def index():
@@ -52,6 +54,7 @@ def create_app():
         if not user or not user['is_active'] or not verify_password(password, user['password_hash']):
             return render_template('login.html', error="Invalid username or password.")
 
+        session.clear()
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['role'] = user['role']
@@ -61,6 +64,16 @@ def create_app():
     def logout():
         session.clear()
         return redirect(url_for('login'))
+
+    @app.route('/protected')
+    @login_required
+    def protected():
+        return f"Protected page. Welcome, {session['username']}."
+
+    @app.route('/admin-test')
+    @role_required('admin')
+    def admin_test():
+        return "Admin-only page. Access granted."
 
     return app
 
