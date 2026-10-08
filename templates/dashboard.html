@@ -1,8 +1,5 @@
 {% extends "base.html" %}
-
-{% block title %}
-ULTRON — Dashboard
-{% endblock %}
+{% block title %}ULTRON — Dashboard{% endblock %}
 
 {% block content %}
 
@@ -12,7 +9,9 @@ ULTRON — Dashboard
 
     <div class="card">
         <div class="label">Total Events</div>
-        <div class="value">--</div>
+        <div class="value">
+            {{ total_events if total_events is not none else '--' }}
+        </div>
     </div>
 
     <div class="card">
@@ -33,7 +32,7 @@ ULTRON — Dashboard
 </div>
 
 <p class="note">
-    Placeholder values. Real security data will be connected in later development stages.
+    Total Events is live from the database. Other cards will be connected in later steps.
 </p>
 
 {% endblock %}
