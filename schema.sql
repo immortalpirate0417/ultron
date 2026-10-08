@@ -8,3 +8,16 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP NULL
 );
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    username VARCHAR(50) NULL,
+    action VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    ip_address VARCHAR(45) NULL,
+    details VARCHAR(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_audit_action (action),
+    INDEX idx_audit_created (created_at)
+);
