@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from db import get_db_connection
 from auth_utils import verify_password, login_required, role_required
 from audit import log_audit
-from audit import log_audit
 from stats import get_total_events
 
 load_dotenv()
@@ -66,6 +65,43 @@ def create_app():
         return render_template('events.html', events=rows, page=page,
                                total_pages=total_pages, total=total,
                                active_page='events')
+
+    
+    @app.route('/incidents')
+    @login_required
+    def incidents():
+        conn = get_db_connection()
+        if not conn:
+            return "Database unavailable.", 503
+
+        cursor = None
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT COUNT(*) AS total FROM incidents")
+            total = cursor.fetchone()['total']
+
+            cursor.execute(
+                "SELECT id, incident_code, classification, affected_user, source_ip, "
+                "severity, status, summary, first_seen, last_seen "
+                "FROM incidents ORDER BY first_seen DESC, id DESC LIMIT %s",
+                (50,)
+            )
+            rows = cursor.fetchall()
+
+            return render_template(
+                'incidents.html',
+                incidents=rows,
+                total=total,
+                active_page='incidents'
+            )
+        except Exception as e:
+            app.logger.exception("Failed to load incidents")
+            return "Could not load incidents.", 500
+        finally:
+            if cursor:
+                cursor.close()
+            conn.close()
+
 
     @app.route('/health')
     def health():
