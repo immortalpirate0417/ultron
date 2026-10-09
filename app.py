@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from db import get_db_connection
 from auth_utils import verify_password, login_required, role_required
 from audit import log_audit
-from stats import get_total_events
+from stats import get_total_events, get_incident_counts
 
 load_dotenv()
 
@@ -22,14 +22,16 @@ def create_app():
             return redirect(url_for('dashboard'))
         return redirect(url_for('login'))
 
+   
     @app.route('/dashboard')
     @login_required
     def dashboard():
         return render_template(
-        'dashboard.html',
-        active_page='dashboard',
-        total_events=get_total_events()
-    )
+            'dashboard.html',
+            active_page='dashboard',
+            total_events=get_total_events(),
+            counts=get_incident_counts()
+        )
 
     @app.route('/events')
     @login_required
