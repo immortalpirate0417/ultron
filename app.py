@@ -1,18 +1,31 @@
+
 import os
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    session,
+    abort,
+)
 from dotenv import load_dotenv
 from db import get_db_connection
 from auth_utils import verify_password, login_required, role_required
 from audit import log_audit
 from stats import get_total_events, get_incident_counts
+from werkzeug.exceptions import HTTPException
 
 load_dotenv()
 
 EVENTS_PER_PAGE = 25
 
+
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-placeholder-change-later')
+    app.config['SECRET_KEY'] = os.getenv(
+        'SECRET_KEY', 'dev-placeholder-change-later'
+    )
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
@@ -22,7 +35,6 @@ def create_app():
             return redirect(url_for('dashboard'))
         return redirect(url_for('login'))
 
-   
     @app.route('/dashboard')
     @login_required
     def dashboard():
@@ -44,31 +56,44 @@ def create_app():
         if not conn:
             return "Database unavailable.", 503
 
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT COUNT(*) AS total FROM security_events")
-        total = cursor.fetchone()['total']
+        cursor = None
+        try:
+            cursor = conn.cursor(dictionary=True)
 
-        total_pages = max(1, -(-total // EVENTS_PER_PAGE))
-        if page > total_pages:
-            page = total_pages
-        offset = (page - 1) * EVENTS_PER_PAGE
+            cursor.execute("SELECT COUNT(*) AS total FROM security_events")
+            total = cursor.fetchone()['total']
 
-        cursor.execute(
-            "SELECT event_id, timestamp, username, source_ip, device_id, event_type, "
-            "status, resource, bytes_transferred, severity, source_type "
-            "FROM security_events ORDER BY timestamp DESC, event_id DESC "
-            "LIMIT %s OFFSET %s",
-            (EVENTS_PER_PAGE, offset)
-        )
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
+            total_pages = max(1, -(-total // EVENTS_PER_PAGE))
+            if page > total_pages:
+                page = total_pages
 
-        return render_template('events.html', events=rows, page=page,
-                               total_pages=total_pages, total=total,
-                               active_page='events')
+            offset = (page - 1) * EVENTS_PER_PAGE
 
-    
+            cursor.execute(
+                "SELECT event_id, timestamp, username, source_ip, device_id, "
+                "event_type, status, resource, bytes_transferred, severity, source_type "
+                "FROM security_events ORDER BY timestamp DESC, event_id DESC "
+                "LIMIT %s OFFSET %s",
+                (EVENTS_PER_PAGE, offset)
+            )
+            rows = cursor.fetchall()
+
+            return render_template(
+                'events.html',
+                events=rows,
+                page=page,
+                total_pages=total_pages,
+                total=total,
+                active_page='events'
+            )
+        except Exception:
+            app.logger.exception("Failed to load security events")
+            return "Could not load security events.", 500
+        finally:
+            if cursor:
+                cursor.close()
+            conn.close()
+
     @app.route('/incidents')
     @login_required
     def incidents():
@@ -79,6 +104,7 @@ def create_app():
         cursor = None
         try:
             cursor = conn.cursor(dictionary=True)
+
             cursor.execute("SELECT COUNT(*) AS total FROM incidents")
             total = cursor.fetchone()['total']
 
@@ -96,7 +122,7 @@ def create_app():
                 total=total,
                 active_page='incidents'
             )
-        except Exception as e:
+        except Exception:
             app.logger.exception("Failed to load incidents")
             return "Could not load incidents.", 500
         finally:
@@ -104,6 +130,54 @@ def create_app():
                 cursor.close()
             conn.close()
 
+    @app.route('/incidents/<int:incident_id>')
+    @login_required
+    def incident_detail(incident_id):
+        conn = get_db_connection()
+        if not conn:
+            return "Database unavailable.", 503
+
+        cursor = None
+        try:
+            cursor = conn.cursor(dictionary=True)
+
+            cursor.execute(
+                "SELECT id, incident_code, rule, classification, affected_user, source_ip, "
+                "severity, status, summary, first_seen, last_seen "
+                "FROM incidents WHERE id = %s",
+                (incident_id,)
+            )
+            incident = cursor.fetchone()
+
+            if not incident:
+                abort(404)
+
+            cursor.execute(
+                "SELECT e.event_id, e.timestamp, e.username, e.source_ip, e.device_id, "
+                "e.event_type, e.status, e.severity, e.source_type "
+                "FROM incident_events ie "
+                "JOIN security_events e ON e.event_id = ie.event_id "
+                "WHERE ie.incident_id = %s ORDER BY e.timestamp, e.event_id",
+                (incident_id,)
+            )
+            evidence = cursor.fetchall()
+
+        except HTTPException:
+            raise
+        except Exception:
+            app.logger.exception("Failed to load incident detail")
+            return "Could not load incident details.", 500
+        finally:
+            if cursor:
+                cursor.close()
+            conn.close()
+
+        return render_template(
+            'incident_detail.html',
+            incident=incident,
+            evidence=evidence,
+            active_page='incidents'
+        )
 
     @app.route('/health')
     def health():
@@ -128,38 +202,71 @@ def create_app():
 
         conn = get_db_connection()
         if not conn:
-            return render_template('login.html', error="Database unavailable.")
+            return render_template(
+                'login.html', error="Database unavailable."
+            )
 
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT id, username, password_hash, role, is_active FROM users WHERE username = %s",
-            (username,)
-        )
-        user = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        cursor = None
+        try:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT id, username, password_hash, role, is_active "
+                "FROM users WHERE username = %s",
+                (username,)
+            )
+            user = cursor.fetchone()
+        except Exception:
+            app.logger.exception("Failed to query user during login")
+            return render_template(
+                'login.html', error="Login service unavailable."
+            ), 500
+        finally:
+            if cursor:
+                cursor.close()
+            conn.close()
 
-        if not user or not user['is_active'] or not verify_password(password, user['password_hash']):
-            log_audit('LOGIN', 'FAILURE',
-                      user_id=user['id'] if user else None,
-                      username=username[:50],
-                      ip_address=ip,
-                      details='Invalid credentials or inactive account')
-            return render_template('login.html', error="Invalid username or password.")
+        if (
+            not user
+            or not user['is_active']
+            or not verify_password(password, user['password_hash'])
+        ):
+            log_audit(
+                'LOGIN',
+                'FAILURE',
+                user_id=user['id'] if user else None,
+                username=username[:50],
+                ip_address=ip,
+                details='Invalid credentials or inactive account'
+            )
+            return render_template(
+                'login.html', error="Invalid username or password."
+            )
 
         session.clear()
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['role'] = user['role']
-        log_audit('LOGIN', 'SUCCESS', user_id=user['id'],
-                  username=user['username'], ip_address=ip)
+
+        log_audit(
+            'LOGIN',
+            'SUCCESS',
+            user_id=user['id'],
+            username=user['username'],
+            ip_address=ip
+        )
         return redirect(url_for('dashboard'))
 
     @app.route('/logout')
     def logout():
         if 'user_id' in session:
-            log_audit('LOGOUT', 'SUCCESS', user_id=session['user_id'],
-                      username=session['username'], ip_address=request.remote_addr)
+            log_audit(
+                'LOGOUT',
+                'SUCCESS',
+                user_id=session['user_id'],
+                username=session['username'],
+                ip_address=request.remote_addr
+            )
+
         session.clear()
         return redirect(url_for('login'))
 
@@ -174,6 +281,7 @@ def create_app():
         return "Admin-only page. Access granted."
 
     return app
+
 
 if __name__ == '__main__':
     app = create_app()

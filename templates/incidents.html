@@ -1,46 +1,34 @@
-
 {% extends "base.html" %}
 {% block title %}ULTRON — Incidents{% endblock %}
 {% block content %}
 <h1>Incidents</h1>
-<p class="note" style="margin-top:0;">
-    Showing {{ incidents|length }} of {{ total }} incidents (newest first, max 50).
-</p>
+<p class="note" style="margin-top:0;">Showing {{ incidents|length }} of {{ total }} incidents (newest first, max 50).</p>
 
 <div class="table-wrap">
-    <table class="data">
-        <thead>
-            <tr>
-                <th>Code</th>
-                <th>Classification</th>
-                <th>User</th>
-                <th>Source IP</th>
-                <th>Severity</th>
-                <th>Status</th>
-                <th>First Seen</th>
-                <th>Last Seen</th>
-                <th>Summary</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for i in incidents %}
-            <tr>
-                <td>{{ i.incident_code or '-' }}</td>
-                <td>{{ i.classification }}</td>
-                <td>{{ i.affected_user or '-' }}</td>
-                <td>{{ i.source_ip or '-' }}</td>
-                <td><span class="badge {{ i.severity|lower }}">{{ i.severity }}</span></td>
-                <td>{{ i.status }}</td>
-                <td>{{ i.first_seen }}</td>
-                <td>{{ i.last_seen }}</td>
-                <td>{{ i.summary or '-' }}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="9">No incidents found. Run <code>python detection_runner.py</code> to create them.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<table class="data">
+    <thead>
+        <tr>
+            <th>Code</th><th>Classification</th><th>User</th><th>Source IP</th>
+            <th>Severity</th><th>Status</th><th>First Seen</th><th>Last Seen</th><th>Summary</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for i in incidents %}
+        <tr>
+            <td><a href="{{ url_for('incident_detail', incident_id=i.id) }}" style="color:var(--accent-bright);">{{ i.incident_code or '-' }}</a></td>
+            <td>{{ i.classification }}</td>
+            <td>{{ i.affected_user or '-' }}</td>
+            <td>{{ i.source_ip or '-' }}</td>
+            <td><span class="badge {{ i.severity|lower }}">{{ i.severity }}</span></td>
+            <td>{{ i.status }}</td>
+            <td>{{ i.first_seen }}</td>
+            <td>{{ i.last_seen }}</td>
+            <td>{{ i.summary or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9">No incidents found. Run <code>python detection_runner.py</code> to create them.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
 </div>
 {% endblock %}
