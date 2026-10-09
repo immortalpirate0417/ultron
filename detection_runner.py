@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 
 from db import get_db_connection
 from rules import detect_brute_force
+from incident_store import save_detections
 
 load_dotenv()
 
@@ -47,3 +48,7 @@ if __name__ == "__main__":
         print(f"- {d['rule']} | ip={d['source_ip']} | users={d['usernames']} | "
               f"attempts={d['failed_attempts']} | {d['first_seen']} -> {d['last_seen']} | "
               f"severity={d['severity']}")
+    saved = save_detections(detections)
+    if saved is None:
+        raise SystemExit("Could not save incidents.")
+    print(f"Incidents created: {saved['created']} | skipped (already saved): {saved['skipped']}")

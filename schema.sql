@@ -47,3 +47,29 @@ CREATE TABLE IF NOT EXISTS security_events (
     INDEX idx_events_ip (source_ip),
     INDEX idx_events_type (event_type)
 );
+
+CREATE TABLE IF NOT EXISTS incidents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    incident_code VARCHAR(20) NULL UNIQUE,
+    rule VARCHAR(50) NOT NULL,
+    classification VARCHAR(50) NOT NULL,
+    affected_user VARCHAR(50) NULL,
+    source_ip VARCHAR(45) NULL,
+    severity VARCHAR(10) NOT NULL DEFAULT 'MEDIUM',
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    summary VARCHAR(255) NULL,
+    first_seen DATETIME NOT NULL,
+    last_seen DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_incidents_status (status),
+    INDEX idx_incidents_severity (severity),
+    INDEX idx_incidents_dedupe (rule, source_ip, first_seen)
+);
+
+CREATE TABLE IF NOT EXISTS incident_events (
+    incident_id INT NOT NULL,
+    event_id BIGINT NOT NULL,
+    PRIMARY KEY (incident_id, event_id),
+    FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE,
+    FOREIGN KEY (event_id) REFERENCES security_events(event_id) ON DELETE CASCADE
+);
