@@ -1,11 +1,14 @@
 import json
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, abort
+import secrets
+from flask import (Flask, render_template, request, redirect, url_for,
+                   session, abort)
 from dotenv import load_dotenv
 from db import get_db_connection
 from auth_utils import verify_password, login_required, role_required
 from audit import log_audit
 from stats import get_total_events, get_incident_counts
+from incident_store import update_incident_status, VALID_STATUSES
 
 load_dotenv()
 
@@ -22,6 +25,13 @@ def parse_risk_factors(value):
     except ValueError:
         return []
     return data if isinstance(data, list) else []
+
+
+def get_csrf_token():
+    """Return this session's CSRF token, creating it if needed."""
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(16)
+    return session['csrf_token']
 
 
 def create_app():
@@ -138,7 +148,28 @@ def create_app():
         return render_template('incident_detail.html', incident=incident,
                                evidence=evidence,
                                risk_factors=parse_risk_factors(incident['risk_factors']),
+                               statuses=VALID_STATUSES,
+                               csrf_token=get_csrf_token(),
                                active_page='incidents')
+
+    @app.route('/incidents/<int:incident_id>/status', methods=['POST'])
+    @role_required('admin', 'analyst')
+    def update_status(incident_id):
+        sent = request.form.get('csrf_token', '')
+        expected = session.get('csrf_token', '')
+        if not expected or not secrets.compare_digest(sent, expected):
+            abort(400)
+
+        new_status = request.form.get('status', '')
+        result = update_incident_status(incident_id, new_status)
+        if result is None:
+            abort(400)
+
+        old_status, new_status = result
+        log_audit('INCIDENT_STATUS', 'SUCCESS', user_id=session['user_id'],
+                  username=session['username'], ip_address=request.remote_addr,
+                  details=f"incident_id={incident_id}: {old_status} -> {new_status}")
+        return redirect(url_for('incident_detail', incident_id=incident_id))
 
     @app.route('/health')
     def health():

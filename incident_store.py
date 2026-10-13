@@ -102,3 +102,39 @@ def save_detections(detections):
         if cursor:
             cursor.close()
         conn.close()
+
+VALID_STATUSES = ("OPEN", "INVESTIGATING", "RESOLVED", "FALSE_POSITIVE")
+
+
+def update_incident_status(incident_id, new_status):
+    """
+    Set an incident's status. Returns (old_status, new_status) on success,
+    or None if the incident does not exist, the status is invalid, or the DB fails.
+    """
+    if new_status not in VALID_STATUSES:
+        return None
+
+    conn = get_db_connection()
+    if not conn:
+        return None
+
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT status FROM incidents WHERE id = %s", (incident_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        old_status = row[0]
+        cursor.execute("UPDATE incidents SET status = %s WHERE id = %s",
+                       (new_status, incident_id))
+        conn.commit()
+        return old_status, new_status
+    except Exception as e:
+        conn.rollback()
+        print(f"Status update error: {e}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
