@@ -138,3 +138,67 @@ def update_incident_status(incident_id, new_status):
         if cursor:
             cursor.close()
         conn.close()
+
+
+MAX_NOTE_LENGTH = 1000
+
+
+def add_incident_note(incident_id, user_id, username, note):
+    """
+    Add an analyst note. Returns True on success, False if the note is empty,
+    too long, the incident does not exist, or the database fails.
+    """
+    note = (note or "").strip()
+    if not note or len(note) > MAX_NOTE_LENGTH:
+        return False
+
+    conn = get_db_connection()
+    if not conn:
+        return False
+
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM incidents WHERE id = %s", (incident_id,))
+        if not cursor.fetchone():
+            return False
+
+        cursor.execute(
+            "INSERT INTO incident_notes (incident_id, user_id, username, note) "
+            "VALUES (%s, %s, %s, %s)",
+            (incident_id, user_id, username[:50], note)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Note save error: {e}")
+        return False
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
+def get_incident_notes(incident_id):
+    """Return notes for an incident, newest first (empty list if none or on failure)."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, username, note, created_at FROM incident_notes "
+            "WHERE incident_id = %s ORDER BY created_at DESC, id DESC",
+            (incident_id,)
+        )
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Notes load error: {e}")
+        return []
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()

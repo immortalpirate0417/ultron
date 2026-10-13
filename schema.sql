@@ -1,3 +1,4 @@
+
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -75,4 +76,16 @@ CREATE TABLE IF NOT EXISTS incident_events (
     PRIMARY KEY (incident_id, event_id),
     FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE,
     FOREIGN KEY (event_id) REFERENCES security_events(event_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS incident_notes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    incident_id INT NOT NULL,
+    user_id INT NULL,
+    username VARCHAR(50) NOT NULL,
+    note VARCHAR(1000) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_notes_incident (incident_id),
+    FOREIGN KEY (incident_id)
+        REFERENCES incidents(id) ON DELETE CASCADE
 );

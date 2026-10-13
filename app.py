@@ -8,7 +8,8 @@ from db import get_db_connection
 from auth_utils import verify_password, login_required, role_required
 from audit import log_audit
 from stats import get_total_events, get_incident_counts
-from incident_store import update_incident_status, VALID_STATUSES
+from incident_store import (update_incident_status, VALID_STATUSES,
+                            add_incident_note, get_incident_notes)
 
 load_dotenv()
 
@@ -32,6 +33,14 @@ def get_csrf_token():
     if 'csrf_token' not in session:
         session['csrf_token'] = secrets.token_hex(16)
     return session['csrf_token']
+
+
+def csrf_valid(sent):
+    """True if the submitted token matches the session token (safe for any input)."""
+    expected = session.get('csrf_token', '')
+    if not expected or not sent:
+        return False
+    return secrets.compare_digest(sent.encode('utf-8'), expected.encode('utf-8'))
 
 
 def create_app():
@@ -147,6 +156,7 @@ def create_app():
 
         return render_template('incident_detail.html', incident=incident,
                                evidence=evidence,
+                               notes=get_incident_notes(incident_id),
                                risk_factors=parse_risk_factors(incident['risk_factors']),
                                statuses=VALID_STATUSES,
                                csrf_token=get_csrf_token(),
@@ -155,9 +165,7 @@ def create_app():
     @app.route('/incidents/<int:incident_id>/status', methods=['POST'])
     @role_required('admin', 'analyst')
     def update_status(incident_id):
-        sent = request.form.get('csrf_token', '')
-        expected = session.get('csrf_token', '')
-        if not expected or not secrets.compare_digest(sent, expected):
+        if not csrf_valid(request.form.get('csrf_token', '')):
             abort(400)
 
         new_status = request.form.get('status', '')
@@ -169,6 +177,22 @@ def create_app():
         log_audit('INCIDENT_STATUS', 'SUCCESS', user_id=session['user_id'],
                   username=session['username'], ip_address=request.remote_addr,
                   details=f"incident_id={incident_id}: {old_status} -> {new_status}")
+        return redirect(url_for('incident_detail', incident_id=incident_id))
+
+    @app.route('/incidents/<int:incident_id>/notes', methods=['POST'])
+    @role_required('admin', 'analyst')
+    def add_note(incident_id):
+        if not csrf_valid(request.form.get('csrf_token', '')):
+            abort(400)
+
+        note = request.form.get('note', '')
+        if not add_incident_note(incident_id, session['user_id'],
+                                 session['username'], note):
+            abort(400)
+
+        log_audit('INCIDENT_NOTE', 'SUCCESS', user_id=session['user_id'],
+                  username=session['username'], ip_address=request.remote_addr,
+                  details=f"incident_id={incident_id}: note added")
         return redirect(url_for('incident_detail', incident_id=incident_id))
 
     @app.route('/health')

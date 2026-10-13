@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 {% block title %}ULTRON — {{ incident.incident_code }}{% endblock %}
 {% block content %}
@@ -83,6 +84,28 @@
     </tbody>
 </table>
 </div>
+
+<h1 style="margin-top:28px;">Analyst Notes ({{ notes|length }})</h1>
+
+{% if session.get('role') in ('admin', 'analyst') %}
+<form method="POST" action="{{ url_for('add_note', incident_id=incident.id) }}" style="margin-bottom:16px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <textarea name="note" rows="3" maxlength="1000" required
+              placeholder="Add an investigation note (max 1000 characters)"
+              style="width:100%;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:3px;padding:10px;font-family:inherit;"></textarea>
+    <button type="submit"
+            style="margin-top:8px;background:var(--accent);color:#fff;border:none;padding:9px 16px;border-radius:3px;font-weight:700;cursor:pointer;">Add note</button>
+</form>
+{% endif %}
+
+{% for n in notes %}
+<div class="card" style="margin-bottom:10px;">
+    <div class="label">{{ n.username }} &nbsp;|&nbsp; {{ n.created_at }}</div>
+    <div style="margin-top:8px;white-space:pre-wrap;">{{ n.note }}</div>
+</div>
+{% else %}
+<p class="note">No notes yet.</p>
+{% endfor %}
 
 <div class="pager"><a href="{{ url_for('incidents') }}">&laquo; Back to incidents</a></div>
 {% endblock %}
