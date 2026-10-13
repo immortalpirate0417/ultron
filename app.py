@@ -6,7 +6,7 @@ from flask import (Flask, render_template, request, redirect, url_for,
 from dotenv import load_dotenv
 from db import get_db_connection
 from auth_utils import verify_password, login_required, role_required
-from audit import log_audit
+from audit import log_audit, get_incident_audit_history
 from stats import get_total_events, get_incident_counts
 from incident_store import (update_incident_status, VALID_STATUSES,
                             add_incident_note, get_incident_notes)
@@ -154,13 +154,16 @@ def create_app():
         cursor.close()
         conn.close()
 
+        
         return render_template('incident_detail.html', incident=incident,
                                evidence=evidence,
                                notes=get_incident_notes(incident_id),
+                               audit_history=get_incident_audit_history(incident_id),
                                risk_factors=parse_risk_factors(incident['risk_factors']),
                                statuses=VALID_STATUSES,
                                csrf_token=get_csrf_token(),
                                active_page='incidents')
+
 
     @app.route('/incidents/<int:incident_id>/status', methods=['POST'])
     @role_required('admin', 'analyst')

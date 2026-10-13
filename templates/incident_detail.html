@@ -107,5 +107,26 @@
 <p class="note">No notes yet.</p>
 {% endfor %}
 
+<h1 style="margin-top:28px;">Audit History ({{ audit_history|length }})</h1>
+<div class="table-wrap">
+<table class="data">
+    <thead>
+        <tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+        {% for a in audit_history %}
+        <tr>
+            <td>{{ a.created_at }}</td>
+            <td>{{ a.username or '-' }}</td>
+            <td>{{ a.action }}</td>
+            <td>{{ a.details or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">No audit entries for this incident yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
 <div class="pager"><a href="{{ url_for('incidents') }}">&laquo; Back to incidents</a></div>
 {% endblock %}
