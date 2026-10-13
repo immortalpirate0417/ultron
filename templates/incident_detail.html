@@ -1,51 +1,143 @@
+
 {% extends "base.html" %}
+
 {% block title %}ULTRON — {{ incident.incident_code }}{% endblock %}
+
 {% block content %}
 <h1>{{ incident.incident_code }} — {{ incident.classification }}</h1>
 
 <div class="cards">
-    <div class="card"><div class="label">Severity</div>
-        <div class="value"><span class="badge {{ incident.severity|lower }}">{{ incident.severity }}</span></div></div>
-    <div class="card"><div class="label">Status</div><div class="value" style="font-size:22px;">{{ incident.status }}</div></div>
-    <div class="card"><div class="label">Affected User</div><div class="value" style="font-size:22px;">{{ incident.affected_user or '-' }}</div></div>
-    <div class="card"><div class="label">Source IP</div><div class="value" style="font-size:22px;">{{ incident.source_ip or '-' }}</div></div>
+    <div class="card">
+        <div class="label">Risk Score</div>
+        <div class="value">
+            {% if incident.risk_score is not none %}
+                {{ incident.risk_score }}<span style="font-size: 16px; color: var(--muted);">/100</span>
+                <span class="badge {{ (incident.risk_level or '')|lower }}">
+                    {{ incident.risk_level or 'UNKNOWN' }}
+                </span>
+            {% else %}
+                -
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="label">Severity</div>
+        <div class="value">
+            <span class="badge {{ incident.severity|lower }}">
+                {{ incident.severity }}
+            </span>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="label">Status</div>
+        <div class="value" style="font-size: 22px;">
+            {{ incident.status }}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="label">Affected User</div>
+        <div class="value" style="font-size: 22px;">
+            {{ incident.affected_user or '-' }}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="label">Source IP</div>
+        <div class="value" style="font-size: 22px;">
+            {{ incident.source_ip or '-' }}
+        </div>
+    </div>
 </div>
 
 <p class="note">
-    <strong>Rule:</strong> {{ incident.rule }} &nbsp;|&nbsp;
-    <strong>First seen:</strong> {{ incident.first_seen }} &nbsp;|&nbsp;
-    <strong>Last seen:</strong> {{ incident.last_seen }}<br>
+    <strong>Rule:</strong> {{ incident.rule }}
+    &nbsp;|&nbsp;
+    <strong>First seen:</strong> {{ incident.first_seen }}
+    &nbsp;|&nbsp;
+    <strong>Last seen:</strong> {{ incident.last_seen }}
+    <br>
     <strong>Summary:</strong> {{ incident.summary or '-' }}
 </p>
 
-<h1 style="margin-top:28px;">Evidence Events ({{ evidence|length }})</h1>
+<h1 style="margin-top: 28px;">Risk Factors</h1>
+
 <div class="table-wrap">
-<table class="data">
-    <thead>
-        <tr>
-            <th>ID</th><th>Timestamp</th><th>User</th><th>Source IP</th><th>Device</th>
-            <th>Type</th><th>Status</th><th>Severity</th><th>Source</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for e in evidence %}
-        <tr>
-            <td>{{ e.event_id }}</td>
-            <td>{{ e.timestamp }}</td>
-            <td>{{ e.username or '-' }}</td>
-            <td>{{ e.source_ip or '-' }}</td>
-            <td>{{ e.device_id or '-' }}</td>
-            <td>{{ e.event_type }}</td>
-            <td>{{ e.status or '-' }}</td>
-            <td><span class="badge {{ e.severity|lower }}">{{ e.severity }}</span></td>
-            <td>{{ e.source_type }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="9">No evidence events linked.</td></tr>
-        {% endfor %}
-    </tbody>
-</table>
+    <table class="data">
+        <thead>
+            <tr>
+                <th>Factor</th>
+                <th>Points</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for f in risk_factors %}
+            <tr>
+                <td>{{ f.factor }}</td>
+                <td>+{{ f.points }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="2">
+                    No risk score stored. Run
+                    <code>python detection_runner.py</code>.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 
-<div class="pager"><a href="{{ url_for('incidents') }}">&laquo; Back to incidents</a></div>
+<h1 style="margin-top: 28px;">
+    Evidence Events ({{ evidence|length }})
+</h1>
+
+<div class="table-wrap">
+    <table class="data">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Timestamp</th>
+                <th>User</th>
+                <th>Source IP</th>
+                <th>Device</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Severity</th>
+                <th>Source</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for e in evidence %}
+            <tr>
+                <td>{{ e.event_id }}</td>
+                <td>{{ e.timestamp }}</td>
+                <td>{{ e.username or '-' }}</td>
+                <td>{{ e.source_ip or '-' }}</td>
+                <td>{{ e.device_id or '-' }}</td>
+                <td>{{ e.event_type }}</td>
+                <td>{{ e.status or '-' }}</td>
+                <td>
+                    <span class="badge {{ e.severity|lower }}">
+                        {{ e.severity }}
+                    </span>
+                </td>
+                <td>{{ e.source_type }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="9">No evidence events linked.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="pager">
+    <a href="{{ url_for('incidents') }}">&laquo; Back to incidents</a>
+</div>
 {% endblock %}
