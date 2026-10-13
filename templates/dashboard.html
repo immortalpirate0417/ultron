@@ -1,27 +1,41 @@
 
 {% extends "base.html" %}
 {% block title %}ULTRON — Dashboard{% endblock %}
+
 {% block content %}
 <h1>Security Operations Dashboard</h1>
 
 <div class="cards">
     <div class="card">
         <div class="label">Total Events</div>
-        <div class="value">{{ total_events if total_events is not none else '--' }}</div>
+        <div class="value">
+            {{ total_events if total_events is not none else '--' }}
+        </div>
     </div>
+
     <div class="card">
         <div class="label">Anomalies / Incidents</div>
-        <div class="value">{{ counts.total if counts else '--' }}</div>
+        <div class="value">
+            {{ counts.total if counts else '--' }}
+        </div>
     </div>
+
     <div class="card">
         <div class="label">High-Risk Incidents</div>
-        <div class="value danger">{{ counts.high if counts else '--' }}</div>
+        <div class="value danger">
+            {{ counts.high if counts else '--' }}
+        </div>
     </div>
+
     <div class="card">
         <div class="label">Critical Incidents</div>
-        <div class="value danger">{{ counts.critical if counts else '--' }}</div>
+        <div class="value danger">
+            {{ counts.critical if counts else '--' }}
+        </div>
     </div>
 </div>
 
-<p class="note">Live from the database. Counts use incident severity until risk scoring is added.</p>
+<p class="note">
+    Live from the database. High and Critical use each incident's risk level (score-based).
+</p>
 {% endblock %}
