@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 
 from db import get_db_connection
 from anomaly_stats import detect_unusual_login_hour
+from risk import score_unusual_login_hour
+from incident_store import save_detections
 
 load_dotenv()
 
@@ -30,13 +32,32 @@ def load_success_logins():
         conn.close()
 
 
+def is_new_source_ip(detection, events):
+    """True if the user had no earlier successful login from this detection's IP."""
+    ip = detection["source_ip"]
+    if not ip:
+        return False
+    for e in events:
+        if (e["username"] == detection["username"]
+                and e["source_ip"] == ip
+                and e["timestamp"] < detection["timestamp"]):
+            return False
+    return True
+
+
 def run_unusual_login_hour_detection(z_threshold=3.0, min_history=5):
-    """Return unusual-login-hour detections from stored events (None on DB failure)."""
+    """Return unusual-login-hour detections, each with a 'risk' dict (None on DB failure)."""
     events = load_success_logins()
     if events is None:
         return None
-    return detect_unusual_login_hour(events, z_threshold=z_threshold,
-                                     min_history=min_history)
+    detections = detect_unusual_login_hour(events, z_threshold=z_threshold,
+                                           min_history=min_history)
+    for d in detections:
+        d["new_source_ip"] = is_new_source_ip(d, events)
+        d["risk"] = score_unusual_login_hour(
+            d["z_score"], d["timestamp"], new_source_ip=d["new_source_ip"]
+        )
+    return detections
 
 
 if __name__ == "__main__":
@@ -49,4 +70,12 @@ if __name__ == "__main__":
         print(f"- {d['rule']} | user={d['username']} | ip={d['source_ip']} | "
               f"time={d['timestamp']} | hour={d['login_hour']} | "
               f"usual={d['baseline_mean_hour']} (std {d['baseline_std_hours']}) | "
-              f"z={d['z_score']}")
+              f"z={d['z_score']} | new_ip={d['new_source_ip']} | "
+              f"risk={d['risk']['score']} ({d['risk']['level']})")
+        for f in d["risk"]["factors"]:
+            print(f"    +{f['points']}  {f['factor']}")
+
+    saved = save_detections(detections)
+    if saved is None:
+        raise SystemExit("Could not save incidents.")
+    print(f"Incidents created: {saved['created']} | skipped (already saved, risk refreshed): {saved['skipped']}")
