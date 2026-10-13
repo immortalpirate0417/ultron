@@ -66,3 +66,66 @@ def score_brute_force(
         "level": risk_level(score),
         "factors": factors
     }
+
+
+def score_unusual_login_hour(
+    z_score,
+    timestamp,
+    new_source_ip=False,
+    work_start=8,
+    work_end=18
+):
+    """
+    Score an unusual-login-hour detection.
+
+    z_score: deviation from the user's usual login time
+    timestamp: datetime of the login
+    new_source_ip: True if the user has not used this IP before
+
+    Returns:
+        {
+            "score": int,
+            "level": str,
+            "factors": [{"factor": str, "points": int}, ...]
+        }
+    """
+    factors = []
+    deviation = abs(z_score)
+
+    # Deviation from the user's usual login time (maximum 30 points)
+    if deviation >= 6:
+        points = 30
+    elif deviation >= 4:
+        points = 25
+    else:
+        points = 20
+
+    factors.append({
+        "factor": (
+            f"Login time is {deviation:.1f} standard deviations "
+            "from the user's usual"
+        ),
+        "points": points
+    })
+
+    # Activity outside working hours (15 points)
+    if timestamp.hour < work_start or timestamp.hour >= work_end:
+        factors.append({
+            "factor": f"Login outside working hours ({timestamp:%H:%M})",
+            "points": 15
+        })
+
+    # Login from an unfamiliar IP address (20 points)
+    if new_source_ip:
+        factors.append({
+            "factor": "Login from an IP address not previously used by this user",
+            "points": 20
+        })
+
+    score = min(100, sum(f["points"] for f in factors))
+
+    return {
+        "score": score,
+        "level": risk_level(score),
+        "factors": factors
+    }
