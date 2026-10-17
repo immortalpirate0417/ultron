@@ -15,6 +15,7 @@ load_dotenv()
 
 EVENTS_PER_PAGE = 25
 INCIDENTS_LIMIT = 50
+RISK_LEVELS = ("LOW", "MEDIUM", "HIGH", "CRITICAL")
 
 
 def parse_risk_factors(value):
@@ -23,7 +24,7 @@ def parse_risk_factors(value):
         return []
     try:
         data = json.loads(value) if isinstance(value, (str, bytes)) else value
-    except ValueError:
+    except (ValueError, TypeError):
         return []
     return data if isinstance(data, list) else []
 
@@ -101,26 +102,70 @@ def create_app():
     @app.route('/incidents')
     @login_required
     def incidents():
+        status = request.args.get('status', '')
+        risk = request.args.get('risk', '')
+
+        if status not in VALID_STATUSES:
+            status = ''
+        if risk not in RISK_LEVELS:
+            risk = ''
+
+        # Only fixed clause strings are added; values are always parameterized.
+        where = []
+        params = []
+
+        if status:
+            where.append("status = %s")
+            params.append(status)
+
+        if risk:
+            where.append("risk_level = %s")
+            params.append(risk)
+
+        where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+
         conn = get_db_connection()
         if not conn:
             return "Database unavailable.", 503
 
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT COUNT(*) AS total FROM incidents")
-        total = cursor.fetchone()['total']
+        cursor = None
+        try:
+            cursor = conn.cursor(dictionary=True)
 
-        cursor.execute(
-            "SELECT id, incident_code, classification, affected_user, source_ip, "
-            "severity, status, summary, first_seen, last_seen, risk_score, risk_level "
-            "FROM incidents ORDER BY first_seen DESC, id DESC LIMIT %s",
-            (INCIDENTS_LIMIT,)
+            cursor.execute(
+                "SELECT COUNT(*) AS total FROM incidents" + where_sql,
+                tuple(params)
+            )
+            total = cursor.fetchone()['total']
+
+            cursor.execute(
+                "SELECT id, incident_code, classification, affected_user, source_ip, "
+                "severity, status, summary, first_seen, last_seen, risk_score, risk_level "
+                "FROM incidents" + where_sql +
+                " ORDER BY first_seen DESC, id DESC LIMIT %s",
+                tuple(params) + (INCIDENTS_LIMIT,)
+            )
+            rows = cursor.fetchall()
+
+        except Exception as e:
+            print(f"Incidents query error: {e}")
+            return "Unable to load incidents.", 500
+
+        finally:
+            if cursor:
+                cursor.close()
+            conn.close()
+
+        return render_template(
+            'incidents.html',
+            incidents=rows,
+            total=total,
+            statuses=VALID_STATUSES,
+            risk_levels=RISK_LEVELS,
+            selected_status=status,
+            selected_risk=risk,
+            active_page='incidents'
         )
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
-
-        return render_template('incidents.html', incidents=rows, total=total,
-                               active_page='incidents')
 
     @app.route('/incidents/<int:incident_id>')
     @login_required
@@ -138,6 +183,7 @@ def create_app():
             (incident_id,)
         )
         incident = cursor.fetchone()
+
         if not incident:
             cursor.close()
             conn.close()
@@ -155,16 +201,17 @@ def create_app():
         cursor.close()
         conn.close()
 
-        
-        return render_template('incident_detail.html', incident=incident,
-                               evidence=evidence,
-                               notes=get_incident_notes(incident_id),
-                               audit_history=get_incident_audit_history(incident_id),
-                               risk_factors=parse_risk_factors(incident['risk_factors']),
-                               statuses=VALID_STATUSES,
-                               csrf_token=get_csrf_token(),
-                               active_page='incidents')
-
+        return render_template(
+            'incident_detail.html',
+            incident=incident,
+            evidence=evidence,
+            notes=get_incident_notes(incident_id),
+            audit_history=get_incident_audit_history(incident_id),
+            risk_factors=parse_risk_factors(incident['risk_factors']),
+            statuses=VALID_STATUSES,
+            csrf_token=get_csrf_token(),
+            active_page='incidents'
+        )
 
     @app.route('/incidents/<int:incident_id>/status', methods=['POST'])
     @role_required('admin', 'analyst')
@@ -178,9 +225,13 @@ def create_app():
             abort(400)
 
         old_status, new_status = result
-        log_audit('INCIDENT_STATUS', 'SUCCESS', user_id=session['user_id'],
-                  username=session['username'], ip_address=request.remote_addr,
-                  details=f"incident_id={incident_id}: {old_status} -> {new_status}")
+        log_audit(
+            'INCIDENT_STATUS', 'SUCCESS',
+            user_id=session['user_id'],
+            username=session['username'],
+            ip_address=request.remote_addr,
+            details=f"incident_id={incident_id}: {old_status} -> {new_status}"
+        )
         return redirect(url_for('incident_detail', incident_id=incident_id))
 
     @app.route('/incidents/<int:incident_id>/notes', methods=['POST'])
@@ -190,13 +241,18 @@ def create_app():
             abort(400)
 
         note = request.form.get('note', '')
-        if not add_incident_note(incident_id, session['user_id'],
-                                 session['username'], note):
+        if not add_incident_note(
+            incident_id, session['user_id'], session['username'], note
+        ):
             abort(400)
 
-        log_audit('INCIDENT_NOTE', 'SUCCESS', user_id=session['user_id'],
-                  username=session['username'], ip_address=request.remote_addr,
-                  details=f"incident_id={incident_id}: note added")
+        log_audit(
+            'INCIDENT_NOTE', 'SUCCESS',
+            user_id=session['user_id'],
+            username=session['username'],
+            ip_address=request.remote_addr,
+            details=f"incident_id={incident_id}: note added"
+        )
         return redirect(url_for('incident_detail', incident_id=incident_id))
 
     @app.route('/health')
@@ -226,34 +282,49 @@ def create_app():
 
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT id, username, password_hash, role, is_active FROM users WHERE username = %s",
+            "SELECT id, username, password_hash, role, is_active "
+            "FROM users WHERE username = %s",
             (username,)
         )
         user = cursor.fetchone()
         cursor.close()
         conn.close()
 
-        if not user or not user['is_active'] or not verify_password(password, user['password_hash']):
-            log_audit('LOGIN', 'FAILURE',
-                      user_id=user['id'] if user else None,
-                      username=username[:50],
-                      ip_address=ip,
-                      details='Invalid credentials or inactive account')
-            return render_template('login.html', error="Invalid username or password.")
+        if (not user or not user['is_active']
+                or not verify_password(password, user['password_hash'])):
+            log_audit(
+                'LOGIN', 'FAILURE',
+                user_id=user['id'] if user else None,
+                username=username[:50],
+                ip_address=ip,
+                details='Invalid credentials or inactive account'
+            )
+            return render_template(
+                'login.html', error="Invalid username or password."
+            )
 
         session.clear()
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['role'] = user['role']
-        log_audit('LOGIN', 'SUCCESS', user_id=user['id'],
-                  username=user['username'], ip_address=ip)
+
+        log_audit(
+            'LOGIN', 'SUCCESS',
+            user_id=user['id'],
+            username=user['username'],
+            ip_address=ip
+        )
         return redirect(url_for('dashboard'))
 
     @app.route('/logout')
     def logout():
         if 'user_id' in session:
-            log_audit('LOGOUT', 'SUCCESS', user_id=session['user_id'],
-                      username=session['username'], ip_address=request.remote_addr)
+            log_audit(
+                'LOGOUT', 'SUCCESS',
+                user_id=session['user_id'],
+                username=session['username'],
+                ip_address=request.remote_addr
+            )
         session.clear()
         return redirect(url_for('login'))
 
@@ -268,6 +339,7 @@ def create_app():
         return "Admin-only page. Access granted."
 
     return app
+
 
 if __name__ == '__main__':
     app = create_app()

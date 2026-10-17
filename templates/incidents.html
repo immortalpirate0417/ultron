@@ -1,82 +1,63 @@
-
 {% extends "base.html" %}
-
 {% block title %}ULTRON — Incidents{% endblock %}
-
 {% block content %}
 <h1>Incidents</h1>
 
-<p class="note" style="margin-top: 0;">
-    Showing {{ incidents|length }} of {{ total }} incidents
-    (newest first, max 50).
-</p>
+<form method="GET" action="{{ url_for('incidents') }}"
+      style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
+    <label for="status" style="color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:1px;">Status</label>
+    <select name="status" id="status"
+            style="background:var(--panel);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:3px;">
+        <option value="">All</option>
+        {% for s in statuses %}
+        <option value="{{ s }}" {{ 'selected' if s == selected_status else '' }}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    <label for="risk" style="color:var(--muted);font-size:13px;text-transform:uppercase;letter-spacing:1px;">Risk level</label>
+    <select name="risk" id="risk"
+            style="background:var(--panel);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:3px;">
+        <option value="">All</option>
+        {% for r in risk_levels %}
+        <option value="{{ r }}" {{ 'selected' if r == selected_risk else '' }}>{{ r }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit"
+            style="background:var(--accent);color:#fff;border:none;padding:9px 16px;border-radius:3px;font-weight:700;cursor:pointer;">Filter</button>
+    <a href="{{ url_for('incidents') }}" style="color:var(--accent-bright);font-size:14px;">Reset</a>
+</form>
+
+<p class="note" style="margin-top:0;">Showing {{ incidents|length }} of {{ total }} matching incidents (newest first, max 50).</p>
 
 <div class="table-wrap">
-    <table class="data">
-        <thead>
-            <tr>
-                <th>Code</th>
-                <th>Classification</th>
-                <th>User</th>
-                <th>Source IP</th>
-                <th>Risk</th>
-                <th>Severity</th>
-                <th>Status</th>
-                <th>First Seen</th>
-                <th>Last Seen</th>
-                <th>Summary</th>
-            </tr>
-        </thead>
-
-        <tbody>
-            {% for i in incidents %}
-            <tr>
-                <td>
-                    <a
-                        href="{{ url_for('incident_detail', incident_id=i.id) }}"
-                        style="color: var(--accent-bright);"
-                    >
-                        {{ i.incident_code or '-' }}
-                    </a>
-                </td>
-
-                <td>{{ i.classification }}</td>
-                <td>{{ i.affected_user or '-' }}</td>
-                <td>{{ i.source_ip or '-' }}</td>
-
-                <td>
-                    {% if i.risk_score is not none %}
-                        {{ i.risk_score }}
-                        <span class="badge {{ (i.risk_level or '')|lower }}">
-                            {{ i.risk_level or 'UNKNOWN' }}
-                        </span>
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-
-                <td>
-                    <span class="badge {{ i.severity|lower }}">
-                        {{ i.severity }}
-                    </span>
-                </td>
-
-                <td>{{ i.status }}</td>
-                <td>{{ i.first_seen }}</td>
-                <td>{{ i.last_seen }}</td>
-                <td>{{ i.summary or '-' }}</td>
-            </tr>
-
-            {% else %}
-            <tr>
-                <td colspan="10">
-                    No incidents found. Run
-                    <code>python detection_runner.py</code>
-                    to create them.
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<table class="data">
+    <thead>
+        <tr>
+            <th>Code</th><th>Classification</th><th>User</th><th>Source IP</th>
+            <th>Risk</th><th>Severity</th><th>Status</th><th>First Seen</th><th>Last Seen</th><th>Summary</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for i in incidents %}
+        <tr>
+            <td><a href="{{ url_for('incident_detail', incident_id=i.id) }}" style="color:var(--accent-bright);">{{ i.incident_code or '-' }}</a></td>
+            <td>{{ i.classification }}</td>
+            <td>{{ i.affected_user or '-' }}</td>
+            <td>{{ i.source_ip or '-' }}</td>
+            <td>
+                {% if i.risk_score is not none %}
+                    {{ i.risk_score }} <span class="badge {{ i.risk_level|lower }}">{{ i.risk_level }}</span>
+                {% else %}-{% endif %}
+            </td>
+            <td><span class="badge {{ i.severity|lower }}">{{ i.severity }}</span></td>
+            <td>{{ i.status }}</td>
+            <td>{{ i.first_seen }}</td>
+            <td>{{ i.last_seen }}</td>
+            <td>{{ i.summary or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10">No incidents match. Try Reset, or run <code>python run_all_detections.py</code>.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
 </div>
 {% endblock %}
