@@ -134,3 +134,39 @@ def score_unusual_data_volume(z_score, bytes_transferred, baseline_mean_bytes, t
 
     score = min(100, sum(f["points"] for f in factors))
     return {"score": score, "level": risk_level(score), "factors": factors}
+
+
+def score_privilege_change(privilege_level, timestamp, new_source_ip=False,
+                           work_start=8, work_end=18):
+    """
+    Score a privilege-change detection.
+
+    privilege_level: the level that was granted (case-insensitive)
+    timestamp: datetime of the change
+    new_source_ip: True if the user has not used this IP before
+    Returns {"score": int, "level": str, "factors": [{"factor": str, "points": int}, ...]}
+    """
+    factors = []
+    level_name = (privilege_level or "").strip().upper()
+
+    # Power of the granted level (max 40)
+    if level_name in ("ROOT", "SUPERUSER"):
+        points = 40
+    elif level_name == "ADMIN":
+        points = 35
+    else:
+        points = 20
+    factors.append({"factor": f"Privilege granted: {level_name or 'UNKNOWN'}", "points": points})
+
+    # Outside working hours (15)
+    if timestamp.hour < work_start or timestamp.hour >= work_end:
+        factors.append({"factor": f"Privilege change outside working hours ({timestamp:%H:%M})",
+                        "points": 15})
+
+    # Unfamiliar source address (20)
+    if new_source_ip:
+        factors.append({"factor": "Privilege change from an IP address not previously used by this user",
+                        "points": 20})
+
+    score = min(100, sum(f["points"] for f in factors))
+    return {"score": score, "level": risk_level(score), "factors": factors}
