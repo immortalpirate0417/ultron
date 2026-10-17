@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from db import get_db_connection
 from auth_utils import verify_password, login_required, role_required
 from audit import log_audit, get_incident_audit_history
-from stats import get_total_events, get_incident_counts
+from stats import get_total_events, get_incident_counts, get_top_incidents
 from incident_store import (update_incident_status, VALID_STATUSES,
                             add_incident_note, get_incident_notes)
 
@@ -60,7 +60,8 @@ def create_app():
     def dashboard():
         return render_template('dashboard.html', active_page='dashboard',
                                total_events=get_total_events(),
-                               counts=get_incident_counts())
+                               counts=get_incident_counts(),
+                               top_incidents=get_top_incidents())
 
     @app.route('/events')
     @login_required
