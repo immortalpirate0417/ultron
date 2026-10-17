@@ -1,6 +1,8 @@
 from collections import defaultdict
 from datetime import timedelta
 
+SENSITIVE_PRIVILEGE_LEVELS = ("ADMIN", "ROOT", "SUPERUSER")
+
 
 def detect_brute_force(events, threshold=5, window_minutes=10):
     """
@@ -48,4 +50,36 @@ def detect_brute_force(events, threshold=5, window_minutes=10):
                 i = j + 1
             else:
                 i += 1
+    return detections
+
+
+def detect_privilege_change(events, sensitive_levels=SENSITIVE_PRIVILEGE_LEVELS):
+    """
+    Flag successful PRIVILEGE_CHANGE events that grant a sensitive privilege level.
+
+    `events` is a list of dicts using the security_events field names
+    (timestamp, username, source_ip, event_type, status, privilege_level,
+    and optionally event_id, resource). Matching is case-insensitive.
+    Returns a list of detection dicts, ordered by time.
+    """
+    levels = {lvl.upper() for lvl in sensitive_levels}
+    detections = []
+    for e in events:
+        level = (e.get("privilege_level") or "").strip().upper()
+        if (e.get("event_type") == "PRIVILEGE_CHANGE"
+                and e.get("status") == "SUCCESS"
+                and level in levels
+                and e.get("username")
+                and e.get("timestamp") is not None):
+            detections.append({
+                "rule": "PRIVILEGE_CHANGE",
+                "username": e["username"],
+                "source_ip": e.get("source_ip"),
+                "timestamp": e["timestamp"],
+                "event_id": e.get("event_id"),
+                "privilege_level": level,
+                "resource": e.get("resource"),
+                "severity": "HIGH",
+            })
+    detections.sort(key=lambda d: d["timestamp"])
     return detections
