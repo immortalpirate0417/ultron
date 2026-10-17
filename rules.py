@@ -83,3 +83,57 @@ def detect_privilege_change(events, sensitive_levels=SENSITIVE_PRIVILEGE_LEVELS)
             })
     detections.sort(key=lambda d: d["timestamp"])
     return detections
+
+
+def detect_port_scan(events, port_threshold=10, window_seconds=120):
+    """
+    Flag a source IP that connects to >= `port_threshold` DISTINCT destination
+    ports on the same destination IP within `window_seconds`.
+
+    `events` is a list of dicts using the security_events field names
+    (timestamp, source_ip, destination_ip, destination_port, event_type,
+    and optionally event_id). Only NETWORK_CONNECTION events are used.
+    Each (source_ip, destination_ip) pair is checked separately, and windows
+    do not overlap, so one scan produces one detection.
+    Returns a list of detection dicts, ordered by first_seen.
+    """
+    window = timedelta(seconds=window_seconds)
+
+    by_pair = defaultdict(list)
+    for e in events:
+        if (e.get("event_type") == "NETWORK_CONNECTION"
+                and e.get("source_ip")
+                and e.get("destination_ip")
+                and e.get("destination_port") is not None
+                and e.get("timestamp") is not None):
+            by_pair[(e["source_ip"], e["destination_ip"])].append(e)
+
+    detections = []
+    for (src, dst), conns in by_pair.items():
+        conns.sort(key=lambda e: e["timestamp"])
+        n = len(conns)
+        i = 0
+        while i < n:
+            j = i
+            while j + 1 < n and conns[j + 1]["timestamp"] - conns[i]["timestamp"] <= window:
+                j += 1
+            group = conns[i:j + 1]
+            ports = sorted({c["destination_port"] for c in group})
+            if len(ports) >= port_threshold:
+                detections.append({
+                    "rule": "PORT_SCAN",
+                    "source_ip": src,
+                    "destination_ip": dst,
+                    "distinct_ports": len(ports),
+                    "ports": ports,
+                    "first_seen": group[0]["timestamp"],
+                    "last_seen": group[-1]["timestamp"],
+                    "event_ids": [c["event_id"] for c in group if c.get("event_id") is not None],
+                    "severity": "MEDIUM",
+                })
+                i = j + 1
+            else:
+                i += 1
+
+    detections.sort(key=lambda d: d["first_seen"])
+    return detections
