@@ -2,6 +2,9 @@ import json
 
 from db import get_db_connection
 
+VALID_STATUSES = ("OPEN", "INVESTIGATING", "RESOLVED", "FALSE_POSITIVE")
+MAX_NOTE_LENGTH = 1000
+
 
 def _risk_values(d):
     """Return (score, level, factors_json) from a detection's optional 'risk' dict."""
@@ -31,6 +34,15 @@ def _incident_fields(d):
                    f"deviations from the usual time ({d['baseline_mean_hour']:.1f}h)")
         event_ids = [d["event_id"]] if d.get("event_id") is not None else []
         return ("UNUSUAL_LOGIN", d["username"], d["source_ip"],
+                summary[:255], d["timestamp"], d["timestamp"], event_ids)
+
+    if rule == "UNUSUAL_DATA_VOLUME":
+        summary = (f"{d['username']} transferred {d['bytes_transferred']:,} bytes "
+                   f"({d['event_type']}) from {d['source_ip'] or 'unknown IP'}, "
+                   f"{d['z_score']:.1f} standard deviations above the usual "
+                   f"{d['baseline_mean_bytes']:,.0f} bytes")
+        event_ids = [d["event_id"]] if d.get("event_id") is not None else []
+        return ("SUSPICIOUS_DATA_ACCESS", d["username"], d["source_ip"],
                 summary[:255], d["timestamp"], d["timestamp"], event_ids)
 
     raise ValueError(f"Unsupported rule: {rule}")
@@ -103,8 +115,6 @@ def save_detections(detections):
             cursor.close()
         conn.close()
 
-VALID_STATUSES = ("OPEN", "INVESTIGATING", "RESOLVED", "FALSE_POSITIVE")
-
 
 def update_incident_status(incident_id, new_status):
     """
@@ -140,9 +150,6 @@ def update_incident_status(incident_id, new_status):
         conn.close()
 
 
-MAX_NOTE_LENGTH = 1000
-
-
 def add_incident_note(incident_id, user_id, username, note):
     """
     Add an analyst note. Returns True on success, False if the note is empty,
@@ -162,7 +169,6 @@ def add_incident_note(incident_id, user_id, username, note):
         cursor.execute("SELECT id FROM incidents WHERE id = %s", (incident_id,))
         if not cursor.fetchone():
             return False
-
         cursor.execute(
             "INSERT INTO incident_notes (incident_id, user_id, username, note) "
             "VALUES (%s, %s, %s, %s)",

@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 
 from detection_runner import run_brute_force_detection
 from stat_runner import run_unusual_login_hour_detection
+from volume_runner import run_unusual_data_volume_detection
 from incident_store import save_detections
 
 load_dotenv()
@@ -10,6 +11,7 @@ load_dotenv()
 DETECTORS = [
     ("Brute force", run_brute_force_detection),
     ("Unusual login hour", run_unusual_login_hour_detection),
+    ("Unusual data volume", run_unusual_data_volume_detection),
 ]
 
 
