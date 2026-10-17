@@ -45,6 +45,14 @@ def _incident_fields(d):
         return ("SUSPICIOUS_DATA_ACCESS", d["username"], d["source_ip"],
                 summary[:255], d["timestamp"], d["timestamp"], event_ids)
 
+    if rule == "PRIVILEGE_CHANGE":
+        summary = (f"{d['username']} was granted {d['privilege_level']} privileges at "
+                   f"{d['timestamp']:%H:%M} from {d['source_ip'] or 'unknown IP'}"
+                   + (f" ({d['resource']})" if d.get("resource") else ""))
+        event_ids = [d["event_id"]] if d.get("event_id") is not None else []
+        return ("PRIVILEGE_ABUSE", d["username"], d["source_ip"],
+                summary[:255], d["timestamp"], d["timestamp"], event_ids)
+
     raise ValueError(f"Unsupported rule: {rule}")
 
 
