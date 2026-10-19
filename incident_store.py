@@ -53,6 +53,13 @@ def _incident_fields(d):
         return ("PRIVILEGE_ABUSE", d["username"], d["source_ip"],
                 summary[:255], d["timestamp"], d["timestamp"], event_ids)
 
+    if rule == "PORT_SCAN":
+        summary = (f"{d['source_ip']} probed {d['distinct_ports']} distinct ports on "
+                   f"{d['destination_ip']} between {d['first_seen']:%H:%M:%S} and "
+                   f"{d['last_seen']:%H:%M:%S}")
+        return ("PORT_SCAN_INDICATOR", None, d["source_ip"],
+                summary[:255], d["first_seen"], d["last_seen"], d.get("event_ids") or [])
+
     raise ValueError(f"Unsupported rule: {rule}")
 
 

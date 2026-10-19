@@ -16,7 +16,7 @@ def load_network_events():
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT event_id, timestamp, source_ip, destination_ip, destination_port, "
-            "event_type FROM security_events WHERE event_type = %s ORDER BY timestamp",
+            "event_type, status FROM security_events WHERE event_type = %s ORDER BY timestamp",
             ("NETWORK_CONNECTION",)
         )
         return cursor.fetchall()
