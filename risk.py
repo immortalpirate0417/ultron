@@ -170,3 +170,38 @@ def score_privilege_change(privilege_level, timestamp, new_source_ip=False,
 
     score = min(100, sum(f["points"] for f in factors))
     return {"score": score, "level": risk_level(score), "factors": factors}
+
+
+def score_port_scan(distinct_ports, first_seen, open_ports_found=0,
+                    work_start=8, work_end=18):
+    """
+    Score a port-scan detection.
+
+    distinct_ports: number of different destination ports probed
+    first_seen: datetime of the first probe
+    open_ports_found: number of probed ports that accepted the connection
+    Returns {"score": int, "level": str, "factors": [{"factor": str, "points": int}, ...]}
+    """
+    factors = []
+
+    # Breadth of the scan (max 40)
+    if distinct_ports >= 50:
+        points = 40
+    elif distinct_ports >= 20:
+        points = 30
+    else:
+        points = 20
+    factors.append({"factor": f"Scan probed {distinct_ports} distinct ports", "points": points})
+
+    # Outside working hours (15)
+    if first_seen.hour < work_start or first_seen.hour >= work_end:
+        factors.append({"factor": f"Scan started outside working hours ({first_seen:%H:%M})",
+                        "points": 15})
+
+    # Open services discovered (20)
+    if open_ports_found > 0:
+        factors.append({"factor": f"{open_ports_found} probed port(s) accepted the connection (open services found)",
+                        "points": 20})
+
+    score = min(100, sum(f["points"] for f in factors))
+    return {"score": score, "level": risk_level(score), "factors": factors}
